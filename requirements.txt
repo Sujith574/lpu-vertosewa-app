@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+gunicorn
+requests
+pytz
+pypdf
+python-docx
+python-dotenv
+pdfplumber
+google-cloud-firestore
+google-genai

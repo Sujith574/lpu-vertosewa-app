@@ -1,0 +1,336 @@
+=====================================================================
+LPU OFFICIAL KNOWLEDGE BASE
+(Used by the LPU AI Assistant Chatbot)
+=====================================================================
+
+ATTENDANCE RULES
+• Minimum 75% attendance required per course.
+• Below 75% leads to SOA → student cannot appear for end-term exam.
+• Medical attendance is added ONLY when the student visits Uni-Health Centre.
+• Attendance counted up to the last teaching day.
+• Check attendance: UMS → Academics → Attendance.
+• Issues with attendance → Raise RMS (Category: Attendance).
+• If attendance is low → attend all remaining classes + meet faculty.
+
+CGPA & GRADING RULES
+• CGPA = (Total of Credits × Grade Points) ÷ Total Credits.
+• Grade Points:
+  - O = 10
+  - A+ = 9
+  - A = 8
+  - B+ = 7
+  - B = 6
+  - C = 5
+  - D = 4
+• Reappear replaces only the END-TERM marks, not internal marks.
+• Internal marks remain same even after reappear.
+• CGPA improves only if the new grade is higher than previous.
+• Transcripts available on UMS or at Registrar Office.
+
+DISCIPLINE RULES
+• Ragging, bullying, harassment strictly prohibited.
+• Fights, abusive behavior, alcohol, drugs → strict action.
+• Social media abuse or defamation → Cyber Cell action.
+• Cheating in exams → UMC case → exam cancellation + penalties.
+• Possible punishments:
+  - Warning
+  - Fine
+  - Suspension
+  - Rustication (severe cases)
+
+DRESS CODE RULES
+• Formal uniform is mandatory from Monday to Friday.
+• Casual dress allowed on Saturday & Sunday.
+• Not allowed in academics:
+  - Shorts
+  - Ripped jeans
+  - Slippers
+  - Offensive prints
+• Lab coat required in labs & workshops.
+
+EXAM & REAPPEAR RULES
+• Reappear fee: ₹500 per course.
+• Reappear affects only end-term marks (internal marks unchanged).
+• ID Card + Admit Card mandatory for all exams.
+• Late entry beyond 15 minutes is not allowed.
+• No leaving exam hall during first & last 30 minutes.
+• Mobiles, smartwatches, electronic devices strictly prohibited.
+
+FEE & ACCOUNTS RULES
+• Late fee: approx ₹100/day (varies by policy).
+• Pending fees → UMS access restrictions + exam restrictions.
+• Fee receipts available on UMS.
+• Scholarships offered:
+  - JEE
+  - CBSE/Board toppers
+  - LPUNEST
+  - Sports
+  - Defence
+• Refund rules depend on LPU Refund Policy.
+
+RMS SYSTEM (RELATIONSHIP MANAGEMENT SYSTEM)
+• RMS is for raising official complaints and requests.
+• Path: UMS → RMS → Log Request.
+• RMS Categories include:
+  - Attendance
+  - Marks / Academics
+  - WiFi / Internet
+  - Electricity
+  - Water supply
+  - Hostel issues
+  - Mess complaints
+  - Maintenance & repair
+• Normal resolution time: 2–3 working days.
+• Escalation hierarchy:
+  1. Warden
+  2. HOD or Department Coordinator
+  3. Division Head
+
+HOSTEL ATTENDANCE & TIMINGS
+• Mandatory to be inside hostel before attendance timing.
+• In-time:
+  - May–Oct → 8:00 PM
+  - Nov–Feb → 7:00 PM
+  - Mar–Apr → 7:30 PM
+• Late entry recorded and may result in disciplinary action.
+• Students must report attendance daily.
+
+HOSTEL LEAVE RULES
+• All leave must be applied through UMS only.
+• Day Leave limit: ~75 per term.
+• Night Leave limit: ~60 per term.
+• Extended Leave: +3 hours (about 30 per term).
+• Emergency leave is granted by warden.
+• After night leave, student must return before hostel attendance time.
+
+
+HOSTEL RULES
+• No roaming outside hostel after attendance.
+• Silence hours: 10 PM – 6 AM.
+• Electric cookers, heaters, induction, etc. are not allowed.
+• Visitors only allowed in designated visitor rooms.
+• Anti-ragging rules strictly enforced.
+• Damaging hostel property → fine + disciplinary action.
+
+ID CARD RULES
+• ID Card is mandatory across campus.
+• Must carry ID during academics, exams, mess, hostels, library.
+• Lost ID procedure:
+  1. Inform warden immediately.
+  2. Receive temporary slip (valid 48 hours).
+  3. Apply for new ID via UMS.
+• Using someone else's ID is a serious violation.
+
+LIBRARY RULES
+• Complete silence must be maintained.
+• Mobile phones on silent mode.
+• Borrowing limit:
+  - UG students: 4 books
+  - PG students: 6 books
+• Late return → per-day fine.
+• Bags not allowed inside reading hall.
+
+MEDICAL RULES
+• Uni-Health Centre operates 24×7.
+• Medical attendance counted ONLY if student personally visits the hospital.
+• Sick food provided only with warden approval.
+• For emergencies:
+  - Contact security
+  - Contact hospital numbers
+
+MESS RULES
+• Mess timings:
+  - Breakfast: 7:15 AM – 9:30 AM
+  - Lunch: 11:30 AM – 3:00 PM
+  - Dinner: 7:30 PM – 9:30 PM
+• Food not delivered to rooms (except medical cases).
+• Misbehavior with staff → strict action.
+• Mess complaints → raise RMS.
+
+PARKING RULES
+• Only registered vehicles allowed.
+• Helmet mandatory for two-wheelers.
+• Speed limit: 30 km/hr.
+• Park only in designated parking zones.
+• Misuse/violations → penalty or suspension of vehicle pass.
+
+PLACEMENTS & TRAINING
+• No active backlogs allowed for most companies.
+• Minimum CGPA depends on company.
+• Attend placement classes and mock tests regularly.
+• Recruitment process usually:
+  1. Online Test
+  2. Technical Interview
+  3. HR Interview
+• Placement support contacts available on UMS.
+
+=====================================================================
+IMPORTANT EMAILS & CONTACT NUMBERS
+=====================================================================
+
+📧 EMAIL IDs
+• AO Records: ao.records@lpu.co.in
+• DSR (Division of Student Relations): dsr@lpu.co.in
+• Examination: examination@lpu.co.in
+• Fees: onlinefee@lpu.co.in
+• Parents Support: parents@lpu.co.in
+• Admissions:
+  - admissions@lpu.co.in
+  - admission.record@lpu.co.in
+• Bihar Student Credit Card:
+  - bihar.ssiv@lpu.co.in
+• Placement Cell:
+  - placement@lpu.co.in
+• Infotech Support:
+  - infotech@lpu.co.in
+
+📞 IMPORTANT PHONE NUMBERS
+• DSR Office: 01824-510311
+• Fees Department: 01824-520099
+• Examination Office: 01824-520150
+• Admission Helpline: 01824-517425
+• Admission WhatsApp: +91 98525-69000
+• Placement Helpline: +91 18245-20140
+• Exam Records Office: +91 18245-20990
+
+=====================================================================
+CAMPUS HELPLINE (24×7)
+=====================================================================
+
+🏥 MEDICAL
+• Uni Hospital Reception:
+  - 01824-444079
+  - 01824-501227
+• Resident Medical Officer: 98784-26880
+• Medical Officer: 98153-64977
+• Nursing Staff:
+  - 75081-82840
+  - 97800-36450
+
+🛡 SECURITY
+• Emergency Numbers:
+  - 95018-10448
+  - 01824-444362
+• Chief Security Officer:
+  - 97800-05945
+  - 01824-444095
+• Senior Security Officer (Sector–1):
+  - 98766-44331
+  - 01824-444365
+• Security Officer (Sector–2):
+  - 98789-77600
+  - 01824-444272
+• Senior Security Officer (Sector–3):
+  - 98784-26874
+  - 01824-444545
+• Senior Security Officer (Sector–4):
+  - 98557-22332
+  - 01824-444070
+
+🔥 FIRE DEPARTMENT
+• Fire Tender (24×7): 75081-83870
+• Fire Officer: 97800-36430
+• Fire Department Office: 01824-444201
+
+🚫 ANTI-RAGGING
+• Helpline: 98766-44331
+
+
+==============================
+LPU OWNERSHIP & LEADERSHIP (OFFICIAL)
+==============================
+
+Lovely Professional University (LPU) was founded and is promoted by the Lovely Group.
+
+FOUNDER & CHANCELLOR:
+Dr. Ashok Kumar Mittal is the Founder and Chancellor of Lovely Professional University.
+
+PRO-CHANCELLOR:
+Dr. Rashmi Mittal is the Pro-Chancellor of Lovely Professional University.
+
+=====================================================================
+QUICK RESPONSE TEMPLATES (AI MUST REFERENCE THESE)
+=====================================================================
+
+• “Attendance very low” → attend all classes + apply medical if valid.
+• “How to apply leave” → UMS → Hostel Leave.
+• “WiFi not working” → raise RMS (WiFi category).
+• “Mess issue” → raise RMS.
+• “Lost ID” → inform warden + temporary slip.
+• “RFID apply” → UMS → Security.
+• “Exam rules” → ID + admit card mandatory.
+• “Visitor pass” → UMS → Security.
+• “Placement eligibility” → maintain CGPA + attendance + discipline.
+
+
+=====================================================================
+DIVISION OF STUDENT WELFARE (DSW)
+=====================================================================
+
+ABOUT DSW
+• DSW (Division of Student Welfare) looks after student discipline, safety, well-being, and grievance redressal.
+• It ensures a safe, inclusive, and supportive campus environment.
+• DSW works in coordination with wardens, security, faculty, and administration.
+
+DSW RESPONSIBILITIES
+• Student discipline and code of conduct
+• Anti-ragging enforcement
+• Student grievances and complaints
+• Counseling and student support
+• Campus safety and welfare activities
+• Handling serious misconduct cases
+• Coordination during emergencies
+
+WHEN TO CONTACT DSW
+• Ragging, harassment, or bullying issues
+• Serious disciplinary matters
+• Safety or security concerns
+• Mental health or personal distress (guidance & referral)
+• Conflicts involving students or groups
+• Escalated issues unresolved at warden or department level
+
+DSW COMPLAINT PROCESS
+• First level: Warden / Department Coordinator
+• Second level: HOD / Division Head
+• Final escalation: DSW Office
+
+• Complaints can be raised via:
+  - UMS → RMS → Appropriate Category
+  - Direct visit to DSW office (if required)
+
+ANTI-RAGGING (DSW MONITORED)
+• Ragging is strictly prohibited inside and outside campus.
+• Punishments may include:
+  - Suspension
+  - Rustication
+  - Expulsion
+  - Legal action (as per UGC norms)
+
+• Anti-ragging complaints can be reported immediately to:
+  - Warden
+  - Security
+  - DSW Office
+
+STUDENT COUNSELING & SUPPORT
+• DSW facilitates student counseling support.
+• Students facing stress, anxiety, academic pressure, or personal issues may seek help.
+• Confidentiality is maintained.
+
+DISCIPLINARY ACTIONS (DSW AUTHORITY)
+• Warning letters
+• Monetary fines
+• Hostel suspension
+• Academic restrictions
+• Rustication (in severe cases)
+
+IMPORTANT NOTE
+• Students must cooperate with DSW inquiries.
+• Misuse of DSW or false complaints may lead to disciplinary action.
+• DSW decisions are final in serious welfare and discipline matters.
+
+=====================================================================
+END OF DSW SECTION
+=====================================================================
+=====================================================================
+END OF LPU KNOWLEDGE BASE
+=====================================================================
