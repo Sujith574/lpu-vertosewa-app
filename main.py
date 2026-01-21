@@ -14,14 +14,14 @@ app = FastAPI()
 logging.basicConfig(level=logging.INFO)
 
 # ------------------------------------------------------
-# HEALTH CHECK (CLOUD RUN)
-# -------------------------------------------------------
+# HEALTH CHECK
+# ------------------------------------------------------
 @app.get("/")
 def health():
     return {"status": "ok"}
 
 # ------------------------------------------------------
-# GEMINI CONFIG
+# GEMINI CONFIG (SAFE)
 # ------------------------------------------------------
 def get_gemini_client():
     return genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
@@ -29,7 +29,7 @@ def get_gemini_client():
 GEMINI_MODEL = "models/gemini-2.5-flash"
 
 # ------------------------------------------------------
-# FIRESTORE (LAZY INIT)
+# FIRESTORE
 # ------------------------------------------------------
 def get_db():
     return firestore.Client()
@@ -83,9 +83,41 @@ def handle_greeting(text: str):
             "• LPU exams, attendance, hostels, fees\n"
             "• RMS / UMS / registrations\n"
             "• DSW notices\n"
-            "• People, GK, UPSC\n"
+            "• People & general knowledge\n"
             "• Date & time"
         )
+    return None
+
+# ------------------------------------------------------
+# TIME & DATE (NO AI EVER)
+# ------------------------------------------------------
+def handle_time_date(text: str):
+    ist = pytz.timezone("Asia/Kolkata")
+    now_ist = datetime.now(ist)
+
+    # Local IST
+    if text in ["time", "time now"]:
+        return f"⏰ Time: {now_ist.strftime('%I:%M %p')} (IST)"
+
+    if text in ["date", "date today", "today date", "date only"]:
+        return f"📅 Date: {now_ist.strftime('%d %B %Y')}"
+
+    # World time
+    if "time in america" in text or "time in usa" in text:
+        et = pytz.timezone("US/Eastern")
+        ct = pytz.timezone("US/Central")
+        pt = pytz.timezone("US/Pacific")
+        return (
+            "🇺🇸 United States Time:\n"
+            f"• Eastern (ET): {datetime.now(et).strftime('%I:%M %p')}\n"
+            f"• Central (CT): {datetime.now(ct).strftime('%I:%M %p')}\n"
+            f"• Pacific (PT): {datetime.now(pt).strftime('%I:%M %p')}"
+        )
+
+    if "time in singapore" in text:
+        sg = pytz.timezone("Asia/Singapore")
+        return f"🇸🇬 Singapore Time: {datetime.now(sg).strftime('%I:%M %p')}"
+
     return None
 
 # ------------------------------------------------------
@@ -98,10 +130,10 @@ You are an educational assistant.
 Rules:
 - Reply only in English
 - Be accurate and concise
-- If context is provided, use it first
-- You MAY add verified general knowledge if helpful
-- Do NOT hallucinate facts
-- If information is missing, clearly say so
+- Use provided context first
+- You may add verified general knowledge
+- Do NOT invent dates, times, or facts
+- If info is missing, say so clearly
 
 CONTEXT:
 {context}
@@ -121,12 +153,17 @@ QUESTION:
         return "Please try again later."
 
 # ------------------------------------------------------
-# CORE MESSAGE LOGIC
+# CORE LOGIC
 # ------------------------------------------------------
 def process_message(msg: str) -> str:
     text = msg.lower().strip()
 
-    # 1️⃣ FIXED PERSON DATA (USED AS CONTEXT, NOT FINAL ANSWER)
+    # 1️⃣ TIME / DATE (HIGHEST PRIORITY)
+    time_reply = handle_time_date(text)
+    if time_reply:
+        return time_reply
+
+    # 2️⃣ FIXED PERSON DATA + GEMINI
     PERSON_CONTEXT = ""
 
     if "sujith lavudu" in text:
@@ -152,25 +189,12 @@ def process_message(msg: str) -> str:
     if PERSON_CONTEXT:
         return gemini_reply(msg, PERSON_CONTEXT)
 
-    # 2️⃣ GREETING
+    # 3️⃣ GREETING
     greet = handle_greeting(text)
     if greet:
         return greet
 
-    # 3️⃣ PURE IST DATE / TIME ONLY
-    if text in ["time", "date", "date only"]:
-        ist = pytz.timezone("Asia/Kolkata")
-        now = datetime.now(ist)
-        return (
-            f"📅 Date: {now.strftime('%d %B %Y')}\n"
-            f"⏰ Time: {now.strftime('%I:%M %p')} (IST)"
-        )
-
-    # 4️⃣ WORLD TIME / TIMEZONE QUESTIONS → AI
-    if "time in" in text or "timezone" in text or "time difference" in text:
-        return gemini_reply(msg)
-
-    # 5️⃣ BOT IDENTITY
+    # 4️⃣ BOT IDENTITY
     if any(k in text for k in [
         "who developed you",
         "who created you",
@@ -182,7 +206,7 @@ def process_message(msg: str) -> str:
             "for Lovely Professional University (LPU)."
         )
 
-    # 6️⃣ LPU-FIRST LOGIC
+    # 5️⃣ LPU-FIRST LOGIC
     LPU_TERMS = [
         "lpu", "lovely professional university",
         "ums", "rms", "dsw",
@@ -202,11 +226,11 @@ def process_message(msg: str) -> str:
 
         return "No official LPU update is available for this query yet."
 
-    # 7️⃣ GENERAL QUESTIONS → GEMINI
+    # 6️⃣ GENERAL QUESTIONS → GEMINI
     return gemini_reply(msg)
 
 # ------------------------------------------------------
-# FLUTTER CHAT API
+# CHAT API
 # ------------------------------------------------------
 @app.post("/chat")
 async def chat_api(request: Request):
