@@ -23,7 +23,9 @@ def health():
 # ------------------------------------------------------
 # GEMINI CONFIG
 # ------------------------------------------------------
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+def get_gemini_client():
+    return genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+
 GEMINI_MODEL = "models/gemini-2.5-flash"
 
 # ------------------------------------------------------
@@ -45,7 +47,7 @@ def load_lpu_knowledge():
 STATIC_LPU = load_lpu_knowledge()
 
 # ------------------------------------------------------
-# SEARCH ADMIN CONTENT (CATEGORY + KEYWORDS)
+# SEARCH ADMIN CONTENT
 # ------------------------------------------------------
 def search_admin_content(question: str):
     db = get_db()
@@ -61,15 +63,12 @@ def search_admin_content(question: str):
 
     for doc in docs:
         d = doc.to_dict()
-
         text = (d.get("textContent") or "").lower()
         keywords = d.get("keywords") or []
         category = (d.get("category") or "").lower()
 
-        if any(k in q for k in keywords) or category in q:
-            matches.append(
-                f"{d.get('title','')}:\n{d.get('textContent','')}"
-            )
+        if any(k.lower() in q for k in keywords) or category in q:
+            matches.append(f"{d.get('title','')}:\n{d.get('textContent','')}")
 
     return "\n\n".join(matches)
 
@@ -84,7 +83,7 @@ def handle_greeting(text: str):
             "• LPU exams, attendance, hostels, fees\n"
             "• RMS / UMS / registrations\n"
             "• DSW notices\n"
-            "• UPSC, GK, people\n"
+            "• People, GK, UPSC\n"
             "• Date & time"
         )
     return None
@@ -98,18 +97,20 @@ You are an educational assistant.
 
 Rules:
 - Reply only in English
-- Be accurate, professional, and concise
-- If LPU context is provided, strictly use it
-- If no context is provided, answer from general knowledge
-- Never say "context not provided"
+- Be accurate and concise
+- If context is provided, use it first
+- You MAY add verified general knowledge if helpful
+- Do NOT hallucinate facts
+- If information is missing, clearly say so
 
-LPU CONTEXT:
+CONTEXT:
 {context}
 
 QUESTION:
 {question}
 """
     try:
+        client = get_gemini_client()
         res = client.models.generate_content(
             model=GEMINI_MODEL,
             contents=prompt
@@ -125,34 +126,39 @@ QUESTION:
 def process_message(msg: str) -> str:
     text = msg.lower().strip()
 
-    # 1️⃣ FIXED IDENTITIES (HIGHEST PRIORITY)
+    # 1️⃣ FIXED PERSON DATA (USED AS CONTEXT, NOT FINAL ANSWER)
+    PERSON_CONTEXT = ""
+
     if "sujith lavudu" in text:
-        return (
+        PERSON_CONTEXT = (
             "Sujith Lavudu is a student innovator, software developer, and author. "
             "He is the co-creator of the LPU Vertosewa AI Assistant "
             "and co-author of the book 'Decode the Code'."
         )
 
-    if "vennela barnana" in text:
-        return (
+    elif "vennela barnana" in text:
+        PERSON_CONTEXT = (
             "Vennela Barnana is an author and researcher. "
             "She is the co-creator of the LPU Vertosewa AI Assistant "
             "and co-author of the book 'Decode the Code'."
         )
 
-    if "rashmi mittal" in text:
-        return (
+    elif "rashmi mittal" in text:
+        PERSON_CONTEXT = (
             "Dr. Rashmi Mittal is the Pro-Chancellor of "
             "Lovely Professional University (LPU)."
         )
+
+    if PERSON_CONTEXT:
+        return gemini_reply(msg, PERSON_CONTEXT)
 
     # 2️⃣ GREETING
     greet = handle_greeting(text)
     if greet:
         return greet
 
-    # 3️⃣ DATE / TIME
-    if "time" in text or "date" in text:
+    # 3️⃣ PURE IST DATE / TIME ONLY
+    if text in ["time", "date", "date only"]:
         ist = pytz.timezone("Asia/Kolkata")
         now = datetime.now(ist)
         return (
@@ -160,7 +166,11 @@ def process_message(msg: str) -> str:
             f"⏰ Time: {now.strftime('%I:%M %p')} (IST)"
         )
 
-    # 4️⃣ BOT IDENTITY
+    # 4️⃣ WORLD TIME / TIMEZONE QUESTIONS → AI
+    if "time in" in text or "timezone" in text or "time difference" in text:
+        return gemini_reply(msg)
+
+    # 5️⃣ BOT IDENTITY
     if any(k in text for k in [
         "who developed you",
         "who created you",
@@ -172,7 +182,7 @@ def process_message(msg: str) -> str:
             "for Lovely Professional University (LPU)."
         )
 
-    # 5️⃣ LPU-FIRST LOGIC
+    # 6️⃣ LPU-FIRST LOGIC
     LPU_TERMS = [
         "lpu", "lovely professional university",
         "ums", "rms", "dsw",
@@ -192,7 +202,7 @@ def process_message(msg: str) -> str:
 
         return "No official LPU update is available for this query yet."
 
-    # 6️⃣ GENERAL QUESTIONS → GEMINI
+    # 7️⃣ GENERAL QUESTIONS → GEMINI
     return gemini_reply(msg)
 
 # ------------------------------------------------------
