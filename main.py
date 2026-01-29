@@ -72,23 +72,23 @@ def search_admin_content(question: str):
 
     return "\n\n".join(matches)
 
+
 # ------------------------------------------------------
 # GREETING
 # ------------------------------------------------------
 def handle_greeting(text: str):
     if text in ["hi", "hello", "hey", "hii", "hai", "namaste"]:
         return (
-            Hello 👋 Welcome to LPU   VertoSewa
- An AI-powered assistant developed for  Lovely Professional University (LPU).
-
- I can help you with information related  to:
-
- • Academics – shedules, rules
- • Hostels & Fees – policies, payments,   queries
- • RMS / UMS – registrations, portals, procedures
- • DSW Notices – updates and announcements
- • People & General Information
- • Date & Time
+            "Hello 👋 Welcome to **LPU VertoSewa**\n\n"
+            "An AI-powered assistant developed for **Lovely Professional University (LPU)**.\n\n"
+            "I can help you with information related to:\n\n"
+            "• Academics – schedules, rules\n"
+            "• Hostels & Fees – policies, payments, queries\n"
+            "• RMS / UMS – registrations, portals, procedures\n"
+            "• DSW Notices – updates and announcements\n"
+            "• People & General Information\n"
+            "• Date & Time\n\n"
+            "Just type your question to get started."
         )
     return None
 
