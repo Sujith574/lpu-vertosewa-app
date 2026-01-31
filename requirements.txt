@@ -1,11 +1,9 @@
 fastapi
 uvicorn
 gunicorn
-requests
-pytz
-pypdf
-python-docx
 python-dotenv
-pdfplumber
+pytz
+numpy
+scikit-learn
 google-cloud-firestore
 google-genai
