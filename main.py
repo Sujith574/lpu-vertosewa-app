@@ -43,6 +43,21 @@ def load_lpu_knowledge():
 STATIC_LPU = load_lpu_knowledge()
 
 # ------------------------------------------------------
+# WELCOME MESSAGE (SESSION BASED)
+# ------------------------------------------------------
+def get_welcome_message():
+    return (
+        "Hello 👋 Welcome to (LPU VertoSewa).\n\n"
+        "I’m an AI assistant for **Lovely Professional University (LPU)**.\n\n"
+        "You can ask me about:\n"
+        "• Academics, exams, attendance\n"
+        "• Hostels, fees, discipline\n"
+        "• UMS / RMS / DSW notices\n"
+        "• General questions as well\n\n"
+        "How can I help you today?"
+    )
+
+# ------------------------------------------------------
 # CHUNKING
 # ------------------------------------------------------
 def chunk_text(text, chunk_size=400):
@@ -77,10 +92,10 @@ def semantic_search(query, documents, top_k=5):
         scored.append((score, doc))
 
     scored.sort(reverse=True, key=lambda x: x[0])
-    return [d for _, d in scored[:top_k]]
+    return [doc for _, doc in scored[:top_k]]
 
 # ------------------------------------------------------
-# LOAD ADMIN DASHBOARD CONTENT
+# LOAD ADMIN DASHBOARD DOCUMENTS
 # ------------------------------------------------------
 def load_admin_documents():
     db = get_db()
@@ -125,7 +140,7 @@ def load_static_documents():
     return docs
 
 # ------------------------------------------------------
-# SESSION MEMORY
+# MEMORY (SESSION LEVEL)
 # ------------------------------------------------------
 conversation_memory = {}
 
@@ -136,21 +151,7 @@ def update_memory(session_id, role, content):
     conversation_memory[session_id] = conversation_memory[session_id][-6:]
 
 # ------------------------------------------------------
-# WELCOME MESSAGE (ONCE PER SESSION)
-# ------------------------------------------------------
-def get_welcome_message():
-    return (
-        "Hello 👋 Welcome to (LPU VertoSewa).\n\n"
-        "I’m an AI assistant for **Lovely Professional University (LPU)**.\n\n"
-        "You can ask me about:\n"
-        "• Academics, exams, attendance\n"
-        "• Hostels, fees, discipline\n"
-        "• UMS / RMS / DSW notices\n"
-        "• General questions as well\n"
-    )
-
-# ------------------------------------------------------
-# TIME & DATE
+# TIME & DATE (STRICT PYTHON)
 # ------------------------------------------------------
 def handle_time_date(text):
     ist = pytz.timezone("Asia/Kolkata")
@@ -196,7 +197,7 @@ QUESTION:
 def process_message(session_id, message):
     text = message.lower().strip()
 
-    # 🟢 WELCOME MESSAGE (FIRST MESSAGE ONLY)
+    # ✅ WELCOME MESSAGE (FIRST MESSAGE ONLY)
     if session_id not in conversation_memory:
         welcome = get_welcome_message()
         update_memory(session_id, "assistant", welcome)
@@ -245,10 +246,10 @@ def process_message(session_id, message):
 @app.post("/chat")
 async def chat_api(request: Request):
     data = await request.json()
-    message = data.get("message", "")
+    message = data.get("message", "").strip()
     session_id = data.get("session_id", "default")
 
-    if not message.strip():
+    if not message:
         return {"reply": "Please enter a valid question."}
 
     return {"reply": process_message(session_id, message)}
