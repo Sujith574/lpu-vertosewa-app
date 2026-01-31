@@ -18,8 +18,7 @@ logging.basicConfig(level=logging.INFO)
 # ------------------------------------------------------
 # GEMINI CONFIG
 # ------------------------------------------------------
-def get_gemini_client():
-    return genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 GEMINI_MODEL = "models/gemini-2.5-flash"
 EMBED_MODEL = "models/embedding-001"
@@ -27,131 +26,25 @@ EMBED_MODEL = "models/embedding-001"
 # ------------------------------------------------------
 # FIRESTORE
 # ------------------------------------------------------
-def get_db():
-    return firestore.Client()
+db = firestore.Client()
 
 # ------------------------------------------------------
-# LOAD STATIC LPU KNOWLEDGE
-# ------------------------------------------------------
-def load_lpu_knowledge():
-    try:
-        with open("lpu_knowledge.txt", "r", encoding="utf-8") as f:
-            return f.read()
-    except Exception:
-        return ""
-
-STATIC_LPU = load_lpu_knowledge()
-
-# ------------------------------------------------------
-# WELCOME MESSAGE (SESSION BASED)
-# ------------------------------------------------------
-def get_welcome_message():
-    return (
-        "Hello 👋 Welcome to (LPU VertoSewa).\n\n"
-        "I’m an AI assistant for **Lovely Professional University (LPU)**.\n\n"
-        "You can ask me about:\n"
-        "• Academics, exams, attendance\n"
-        "• Hostels, fees, discipline\n"
-        "• UMS / RMS / DSW notices\n"
-        "• General questions as well\n\n"
-        "How can I help you today?"
-    )
-
-# ------------------------------------------------------
-# CHUNKING
-# ------------------------------------------------------
-def chunk_text(text, chunk_size=400):
-    words = text.split()
-    return [
-        " ".join(words[i:i + chunk_size])
-        for i in range(0, len(words), chunk_size)
-    ]
-
-# ------------------------------------------------------
-# EMBEDDINGS
-# ------------------------------------------------------
-def embed_text(text: str):
-    client = get_gemini_client()
-    res = client.models.embed_content(
-        model=EMBED_MODEL,
-        content=text
-    )
-    return np.array(res["embedding"])
-
-# ------------------------------------------------------
-# VECTOR SEARCH
-# ------------------------------------------------------
-def semantic_search(query, documents, top_k=5):
-    query_vec = embed_text(query)
-    scored = []
-
-    for doc in documents:
-        score = cosine_similarity(
-            [query_vec], [doc["embedding"]]
-        )[0][0]
-        scored.append((score, doc))
-
-    scored.sort(reverse=True, key=lambda x: x[0])
-    return [doc for _, doc in scored[:top_k]]
-
-# ------------------------------------------------------
-# LOAD ADMIN DASHBOARD DOCUMENTS
-# ------------------------------------------------------
-def load_admin_documents():
-    db = get_db()
-    docs = []
-
-    snapshots = (
-        db.collection("lpu_content")
-        .order_by("createdAt", direction=firestore.Query.DESCENDING)
-        .limit(100)
-        .stream()
-    )
-
-    for snap in snapshots:
-        d = snap.to_dict()
-        chunks = chunk_text(d.get("textContent", ""))
-
-        for chunk in chunks:
-            docs.append({
-                "source": "Admin Dashboard",
-                "title": d.get("title", ""),
-                "text": chunk,
-                "embedding": embed_text(chunk)
-            })
-
-    return docs
-
-# ------------------------------------------------------
-# LOAD STATIC KNOWLEDGE DOCUMENTS
-# ------------------------------------------------------
-def load_static_documents():
-    docs = []
-    chunks = chunk_text(STATIC_LPU)
-
-    for chunk in chunks:
-        docs.append({
-            "source": "LPU Knowledge Base",
-            "title": "lpu_knowledge.txt",
-            "text": chunk,
-            "embedding": embed_text(chunk)
-        })
-
-    return docs
-
-# ------------------------------------------------------
-# MEMORY (SESSION LEVEL)
+# MEMORY
 # ------------------------------------------------------
 conversation_memory = {}
 
-def update_memory(session_id, role, content):
-    conversation_memory.setdefault(session_id, []).append(
-        {"role": role, "content": content}
+# ------------------------------------------------------
+# WELCOME
+# ------------------------------------------------------
+def welcome_message():
+    return (
+        "Hello 👋 Welcome to (LPU VertoSewa).\n\n"
+        "Ask me anything related to Lovely Professional University (LPU).\n"
+        "Academics • Hostels • Exams • UMS • DSW • General queries"
     )
-    conversation_memory[session_id] = conversation_memory[session_id][-6:]
 
 # ------------------------------------------------------
-# TIME & DATE (STRICT PYTHON)
+# TIME & DATE
 # ------------------------------------------------------
 def handle_time_date(text):
     ist = pytz.timezone("Asia/Kolkata")
@@ -166,17 +59,80 @@ def handle_time_date(text):
     return None
 
 # ------------------------------------------------------
+# EMBEDDING (SAFE)
+# ------------------------------------------------------
+def embed(text):
+    try:
+        res = client.models.embed_content(
+            model=EMBED_MODEL,
+            content=text
+        )
+        return np.array(res["embedding"])
+    except Exception as e:
+        logging.error(f"Embedding error: {e}")
+        return None
+
+# ------------------------------------------------------
+# LOAD STATIC KNOWLEDGE (ONCE)
+# ------------------------------------------------------
+STATIC_DOCS = []
+
+try:
+    with open("lpu_knowledge.txt", "r", encoding="utf-8") as f:
+        text = f.read()
+        STATIC_DOCS.append({
+            "source": "LPU Knowledge Base",
+            "title": "lpu_knowledge.txt",
+            "text": text,
+            "embedding": embed(text)
+        })
+except:
+    pass
+
+# ------------------------------------------------------
+# LOAD ADMIN CONTENT (ONCE)
+# ------------------------------------------------------
+ADMIN_DOCS = []
+
+try:
+    snaps = db.collection("lpu_content").stream()
+    for s in snaps:
+        d = s.to_dict()
+        txt = d.get("textContent", "")
+        ADMIN_DOCS.append({
+            "source": "Admin Dashboard",
+            "title": d.get("title", ""),
+            "text": txt,
+            "embedding": embed(txt)
+        })
+except Exception as e:
+    logging.error(f"Firestore load error: {e}")
+
+ALL_DOCS = [d for d in (ADMIN_DOCS + STATIC_DOCS) if d["embedding"] is not None]
+
+# ------------------------------------------------------
+# SEARCH
+# ------------------------------------------------------
+def semantic_search(query, top_k=4):
+    q_vec = embed(query)
+    if q_vec is None:
+        return []
+
+    scored = []
+    for d in ALL_DOCS:
+        score = cosine_similarity([q_vec], [d["embedding"]])[0][0]
+        scored.append((score, d))
+
+    scored.sort(reverse=True)
+    return [d for _, d in scored[:top_k]]
+
+# ------------------------------------------------------
 # GEMINI ANSWER
 # ------------------------------------------------------
-def gemini_answer(question, context, memory):
+def gemini_answer(question, context):
     prompt = f"""
-You are an official AI assistant for Lovely Professional University (LPU).
-
-Conversation history:
-{memory}
-
-Use the following VERIFIED CONTEXT to answer.
-Cite sources at the end.
+Answer accurately using the context below.
+If unsure, say you are unsure.
 
 CONTEXT:
 {context}
@@ -184,59 +140,45 @@ CONTEXT:
 QUESTION:
 {question}
 """
-    client = get_gemini_client()
-    res = client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=prompt
-    )
-    return res.text.strip()
+    try:
+        res = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt
+        )
+        return res.text.strip()
+    except Exception as e:
+        logging.error(e)
+        return "Sorry, I am facing a temporary issue. Please try again."
 
 # ------------------------------------------------------
-# CORE LOGIC
+# CORE
 # ------------------------------------------------------
-def process_message(session_id, message):
+def process(session_id, message):
     text = message.lower().strip()
 
-    # ✅ WELCOME MESSAGE (FIRST MESSAGE ONLY)
+    # Welcome (only once)
     if session_id not in conversation_memory:
-        welcome = get_welcome_message()
-        update_memory(session_id, "assistant", welcome)
-        return welcome
+        conversation_memory[session_id] = []
+        return welcome_message()
 
-    # Time / Date
+    # Time/date
     td = handle_time_date(text)
     if td:
         return td
 
-    # Load documents
-    admin_docs = load_admin_documents()
-    static_docs = load_static_documents()
-    all_docs = admin_docs + static_docs
+    docs = semantic_search(message)
 
-    # Semantic search
-    relevant = semantic_search(message, all_docs)
-
-    # Build context + citations
     context = ""
     sources = set()
 
-    for doc in relevant:
-        context += f"\n[{doc['source']} – {doc['title']}]\n{doc['text']}\n"
-        sources.add(f"{doc['source']} ({doc['title']})")
+    for d in docs:
+        context += f"\n[{d['source']} – {d['title']}]\n{d['text']}\n"
+        sources.add(f"{d['source']} ({d['title']})")
 
-    # Conversation memory
-    memory = "\n".join(
-        f"{m['role']}: {m['content']}"
-        for m in conversation_memory.get(session_id, [])
-    )
+    answer = gemini_answer(message, context)
 
-    answer = gemini_answer(message, context, memory)
-
-    # Append sources
-    answer += "\n\nSources:\n" + "\n".join(f"- {s}" for s in sources)
-
-    update_memory(session_id, "user", message)
-    update_memory(session_id, "assistant", answer)
+    if sources:
+        answer += "\n\nSources:\n" + "\n".join(f"- {s}" for s in sources)
 
     return answer
 
@@ -246,10 +188,10 @@ def process_message(session_id, message):
 @app.post("/chat")
 async def chat_api(request: Request):
     data = await request.json()
-    message = data.get("message", "").strip()
+    message = data.get("message", "")
     session_id = data.get("session_id", "default")
 
-    if not message:
-        return {"reply": "Please enter a valid question."}
+    if not message.strip():
+        return {"reply": "Please enter a message."}
 
-    return {"reply": process_message(session_id, message)}
+    return {"reply": process(session_id, message)}
