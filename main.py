@@ -18,7 +18,8 @@ logging.basicConfig(level=logging.INFO)
 # ------------------------------------------------------
 # GEMINI CONFIG
 # ------------------------------------------------------
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+def get_gemini_client():
+    return genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 GEMINI_MODEL = "models/gemini-2.5-flash"
 EMBED_MODEL = "models/embedding-001"
@@ -26,21 +27,123 @@ EMBED_MODEL = "models/embedding-001"
 # ------------------------------------------------------
 # FIRESTORE
 # ------------------------------------------------------
-db = firestore.Client()
+def get_db():
+    return firestore.Client()
 
 # ------------------------------------------------------
-# MEMORY
+# LOAD STATIC LPU KNOWLEDGE
+# ------------------------------------------------------
+def load_lpu_knowledge():
+    try:
+        with open("lpu_knowledge.txt", "r", encoding="utf-8") as f:
+            return f.read()
+    except Exception:
+        return ""
+
+STATIC_LPU = load_lpu_knowledge()
+
+# ------------------------------------------------------
+# CHUNKING
+# ------------------------------------------------------
+def chunk_text(text, chunk_size=350):
+    words = text.split()
+    return [
+        " ".join(words[i:i + chunk_size])
+        for i in range(0, len(words), chunk_size)
+    ]
+
+# ------------------------------------------------------
+# EMBEDDINGS
+# ------------------------------------------------------
+def embed_text(text: str):
+    client = get_gemini_client()
+    res = client.models.embed_content(
+        model=EMBED_MODEL,
+        content=text
+    )
+    return np.array(res["embedding"])
+
+# ------------------------------------------------------
+# LOAD ADMIN DOCUMENTS
+# ------------------------------------------------------
+def load_admin_documents():
+    db = get_db()
+    documents = []
+
+    snaps = (
+        db.collection("lpu_content")
+        .order_by("createdAt", direction=firestore.Query.DESCENDING)
+        .limit(150)
+        .stream()
+    )
+
+    for snap in snaps:
+        d = snap.to_dict()
+        for chunk in chunk_text(d.get("textContent", "")):
+            documents.append({
+                "source": "Admin Dashboard",
+                "title": d.get("title", ""),
+                "text": chunk,
+                "embedding": embed_text(chunk)
+            })
+
+    return documents
+
+# ------------------------------------------------------
+# LOAD STATIC DOCUMENTS
+# ------------------------------------------------------
+def load_static_documents():
+    documents = []
+    for chunk in chunk_text(STATIC_LPU):
+        documents.append({
+            "source": "LPU Knowledge Base",
+            "title": "lpu_knowledge.txt",
+            "text": chunk,
+            "embedding": embed_text(chunk)
+        })
+    return documents
+
+# ------------------------------------------------------
+# SEMANTIC SEARCH
+# ------------------------------------------------------
+def semantic_search(query, documents, top_k=4, threshold=0.35):
+    query_vec = embed_text(query)
+    scored = []
+
+    for doc in documents:
+        score = cosine_similarity(
+            [query_vec], [doc["embedding"]]
+        )[0][0]
+        if score >= threshold:
+            scored.append((score, doc))
+
+    scored.sort(reverse=True, key=lambda x: x[0])
+    return [d for _, d in scored[:top_k]]
+
+# ------------------------------------------------------
+# MEMORY (SESSION BASED)
 # ------------------------------------------------------
 conversation_memory = {}
 
+def update_memory(session_id, role, content):
+    conversation_memory.setdefault(session_id, []).append(
+        {"role": role, "content": content}
+    )
+    conversation_memory[session_id] = conversation_memory[session_id][-6:]
+
 # ------------------------------------------------------
-# WELCOME
+# WELCOME MESSAGE
 # ------------------------------------------------------
 def welcome_message():
     return (
-        "Hello 👋 Welcome to (LPU VertoSewa).\n\n"
-        "Ask me anything related to Lovely Professional University (LPU).\n"
-        "Academics • Hostels • Exams • UMS • DSW • General queries"
+        "Hello 👋 Welcome to **LPU VertoSewa**.\n\n"
+        "I’m an AI assistant for **Lovely Professional University (LPU)**.\n\n"
+        "You can ask me about:\n"
+        "• Academics, exams, attendance\n"
+        "• Hostels, fees, discipline\n"
+        "• UMS / RMS / DSW notices\n"
+        "• General questions as well\n\n"
+        "How can I help you today?"
     )
 
 # ------------------------------------------------------
@@ -53,86 +156,41 @@ def handle_time_date(text):
     if text in ["time", "time now"]:
         return f"⏰ {now.strftime('%I:%M %p')} (IST)"
 
-    if text in ["date", "date today"]:
+    if text in ["date", "today date", "date today"]:
         return f"📅 {now.strftime('%d %B %Y')}"
 
     return None
 
 # ------------------------------------------------------
-# EMBEDDING (SAFE)
+# GEMINI – GENERAL
 # ------------------------------------------------------
-def embed(text):
-    try:
-        res = client.models.embed_content(
-            model=EMBED_MODEL,
-            content=text
-        )
-        return np.array(res["embedding"])
-    except Exception as e:
-        logging.error(f"Embedding error: {e}")
-        return None
-
-# ------------------------------------------------------
-# LOAD STATIC KNOWLEDGE (ONCE)
-# ------------------------------------------------------
-STATIC_DOCS = []
-
-try:
-    with open("lpu_knowledge.txt", "r", encoding="utf-8") as f:
-        text = f.read()
-        STATIC_DOCS.append({
-            "source": "LPU Knowledge Base",
-            "title": "lpu_knowledge.txt",
-            "text": text,
-            "embedding": embed(text)
-        })
-except:
-    pass
-
-# ------------------------------------------------------
-# LOAD ADMIN CONTENT (ONCE)
-# ------------------------------------------------------
-ADMIN_DOCS = []
-
-try:
-    snaps = db.collection("lpu_content").stream()
-    for s in snaps:
-        d = s.to_dict()
-        txt = d.get("textContent", "")
-        ADMIN_DOCS.append({
-            "source": "Admin Dashboard",
-            "title": d.get("title", ""),
-            "text": txt,
-            "embedding": embed(txt)
-        })
-except Exception as e:
-    logging.error(f"Firestore load error: {e}")
-
-ALL_DOCS = [d for d in (ADMIN_DOCS + STATIC_DOCS) if d["embedding"] is not None]
-
-# ------------------------------------------------------
-# SEARCH
-# ------------------------------------------------------
-def semantic_search(query, top_k=4):
-    q_vec = embed(query)
-    if q_vec is None:
-        return []
-
-    scored = []
-    for d in ALL_DOCS:
-        score = cosine_similarity([q_vec], [d["embedding"]])[0][0]
-        scored.append((score, d))
-
-    scored.sort(reverse=True)
-    return [d for _, d in scored[:top_k]]
-
-# ------------------------------------------------------
-# GEMINI ANSWER
-# ------------------------------------------------------
-def gemini_answer(question, context):
+def gemini_general(question):
     prompt = f"""
-Answer accurately using the context below.
-If unsure, say you are unsure.
+Answer clearly using general public knowledge.
+Reply only in English.
+
+QUESTION:
+{question}
+"""
+    client = get_gemini_client()
+    res = client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=prompt
+    )
+    return res.text.strip()
+
+# ------------------------------------------------------
+# GEMINI – CONTEXTUAL (LPU)
+# ------------------------------------------------------
+def gemini_contextual(question, context, memory):
+    prompt = f"""
+You are an official AI assistant for Lovely Professional University (LPU).
+
+Conversation history:
+{memory}
+
+Use ONLY the following verified context.
+If answer is missing, say so clearly.
 
 CONTEXT:
 {context}
@@ -140,46 +198,66 @@ CONTEXT:
 QUESTION:
 {question}
 """
-    try:
-        res = client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=prompt
-        )
-        return res.text.strip()
-    except Exception as e:
-        logging.error(e)
-        return "Sorry, I am facing a temporary issue. Please try again."
+    client = get_gemini_client()
+    res = client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=prompt
+    )
+    return res.text.strip()
 
 # ------------------------------------------------------
-# CORE
+# CORE LOGIC
 # ------------------------------------------------------
-def process(session_id, message):
+def process_message(session_id, message):
     text = message.lower().strip()
 
-    # Welcome (only once)
+    # 1️⃣ First message → Welcome
     if session_id not in conversation_memory:
         conversation_memory[session_id] = []
+        update_memory(session_id, "assistant", welcome_message())
         return welcome_message()
 
-    # Time/date
+    # 2️⃣ Greetings (NO Gemini)
+    if text in ["hi", "hii", "hello", "hey", "hai"]:
+        return "Hello 👋 How can I help you?"
+
+    # 3️⃣ Time / Date
     td = handle_time_date(text)
     if td:
         return td
 
-    docs = semantic_search(message)
+    # 4️⃣ Load documents
+    admin_docs = load_admin_documents()
+    static_docs = load_static_documents()
+    all_docs = admin_docs + static_docs
 
-    context = ""
-    sources = set()
+    # 5️⃣ Semantic search
+    relevant = semantic_search(message, all_docs)
 
-    for d in docs:
-        context += f"\n[{d['source']} – {d['title']}]\n{d['text']}\n"
-        sources.add(f"{d['source']} ({d['title']})")
+    if relevant:
+        context = ""
+        sources = set()
 
-    answer = gemini_answer(message, context)
+        for doc in relevant:
+            context += f"\n[{doc['source']} – {doc['title']}]\n{doc['text']}\n"
+            sources.add(f"{doc['source']} ({doc['title']})")
 
-    if sources:
+        memory = "\n".join(
+            f"{m['role']}: {m['content']}"
+            for m in conversation_memory.get(session_id, [])
+        )
+
+        answer = gemini_contextual(message, context, memory)
         answer += "\n\nSources:\n" + "\n".join(f"- {s}" for s in sources)
 
+        update_memory(session_id, "user", message)
+        update_memory(session_id, "assistant", answer)
+        return answer
+
+    # 6️⃣ FINAL FALLBACK → GENERAL GEMINI
+    answer = gemini_general(message)
+    update_memory(session_id, "user", message)
+    update_memory(session_id, "assistant", answer)
     return answer
 
 # ------------------------------------------------------
@@ -188,10 +266,10 @@ def process(session_id, message):
 @app.post("/chat")
 async def chat_api(request: Request):
     data = await request.json()
-    message = data.get("message", "")
+    message = data.get("message", "").strip()
     session_id = data.get("session_id", "default")
 
-    if not message.strip():
-        return {"reply": "Please enter a message."}
+    if not message:
+        return {"reply": "Please enter a valid question."}
 
-    return {"reply": process(session_id, message)}
+    return {"reply": process_message(session_id, message)}
