@@ -127,8 +127,8 @@ def handle_greeting(text: str):
         return (
             "Hello 👋 I’m **LPU VertoSewa**, the AI assistant for "
             "**Lovely Professional University**.\n\n"
-            "Ask your question related to academics, exams, UMS/RMS, "
-            "student organizations, hostels, fees, or university policies."
+            "Ask me anything related to academics, exams, UMS/RMS, "
+            "hostels, fees, or university information."
         )
     return None
 
@@ -148,16 +148,18 @@ def handle_time_date(text: str):
     return None
 
 # ------------------------------------------------------
-# GEMINI RESPONSE (CONTROLLED FALLBACK)
+# GEMINI RESPONSE (CLEAN – NO CONTEXT TALK)
 # ------------------------------------------------------
 def gemini_reply(question: str, context: str = ""):
     prompt = f"""
 You are an AI assistant for Lovely Professional University (LPU).
 
-RULES:
-- If context is provided, prioritize it
-- If context does not contain the answer, answer using general knowledge
-- Do NOT invent internal LPU rules or policies
+IMPORTANT INSTRUCTIONS:
+- Use the CONTEXT if it contains the answer
+- If the CONTEXT does not contain the answer, answer normally using general knowledge
+- NEVER mention the context, sources, or limitations
+- NEVER explain your reasoning
+- Give ONLY the final, direct answer
 - Be accurate, clear, and professional
 
 CONTEXT:
@@ -166,7 +168,7 @@ CONTEXT:
 QUESTION:
 {question}
 
-ANSWER:
+FINAL ANSWER ONLY:
 """
     try:
         client = get_gemini_client()
@@ -195,7 +197,7 @@ def process_message(msg: str) -> str:
     if time_reply:
         return time_reply
 
-    # 3. Person queries (Sujith / Vennela)
+    # 3. Person queries
     for name, context in PERSON_CONTEXT.items():
         if name in text:
             return gemini_reply(msg, context)
@@ -235,7 +237,7 @@ def process_message(msg: str) -> str:
 
         return gemini_reply(msg)
 
-    # 6. General questions
+    # 6. General fallback
     return gemini_reply(msg)
 
 # ------------------------------------------------------
