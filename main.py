@@ -38,7 +38,7 @@ def get_db():
     return firestore.Client()
 
 # ------------------------------------------------------
-# LOAD LPU KNOWLEDGE
+# LOAD LPU KNOWLEDGE FILE
 # ------------------------------------------------------
 def load_lpu_knowledge():
     try:
@@ -51,7 +51,21 @@ def load_lpu_knowledge():
 STATIC_LPU = load_lpu_knowledge()
 
 # ------------------------------------------------------
-# SEARCH LPU KNOWLEDGE FILE
+# PERSON CONTEXT (CONTROLLED)
+# ------------------------------------------------------
+PERSON_CONTEXT = {
+    "sujith lavudu": """
+Sujith Lavudu is a student innovator and software developer at Lovely Professional University.
+He is the co-creator of the LPU VertoSewa AI assistant and co-author of the book 'Decode the Code'.
+""",
+    "vennela barnana": """
+Vennela Barnana is a researcher and author associated with Lovely Professional University.
+She is the co-creator of the LPU VertoSewa AI assistant and co-author of the book 'Decode the Code'.
+"""
+}
+
+# ------------------------------------------------------
+# SEARCH LPU KNOWLEDGE (PRIMARY SOURCE)
 # ------------------------------------------------------
 def search_lpu_knowledge(question: str, knowledge: str) -> str:
     q_words = question.lower().split()
@@ -88,7 +102,6 @@ def search_admin_content(question: str):
 
     for doc in docs:
         d = doc.to_dict()
-        text = (d.get("textContent") or "").lower()
         keywords = [k.lower() for k in (d.get("keywords") or [])]
         category = (d.get("category") or "").lower()
 
@@ -112,10 +125,10 @@ def search_admin_content(question: str):
 def handle_greeting(text: str):
     if any(text.startswith(g) for g in ["hi", "hello", "hey", "hai", "namaste"]):
         return (
-            "Hello 👋 I’m **LPU VertoSewa**, the official AI assistant for "
+            "Hello 👋 I’m **LPU VertoSewa**, the AI assistant for "
             "**Lovely Professional University**.\n\n"
-            "Ask me anything related to academics, exams, UMS/RMS, hostels, "
-            "fees, or university policies."
+            "Ask your question related to academics, exams, UMS/RMS, "
+            "student organizations, hostels, fees, or university policies."
         )
     return None
 
@@ -135,17 +148,17 @@ def handle_time_date(text: str):
     return None
 
 # ------------------------------------------------------
-# GEMINI RESPONSE
+# GEMINI RESPONSE (CONTROLLED FALLBACK)
 # ------------------------------------------------------
 def gemini_reply(question: str, context: str = ""):
     prompt = f"""
 You are an AI assistant for Lovely Professional University (LPU).
 
-STRICT RULES:
-- If context is provided, answer ONLY from it
-- Do NOT assume or invent LPU-specific rules
-- Be precise, factual, and concise
-- Do NOT generate dates or numbers unless present in context
+RULES:
+- If context is provided, prioritize it
+- If context does not contain the answer, answer using general knowledge
+- Do NOT invent internal LPU rules or policies
+- Be accurate, clear, and professional
 
 CONTEXT:
 {context}
@@ -182,23 +195,36 @@ def process_message(msg: str) -> str:
     if time_reply:
         return time_reply
 
-    # 3. Bot identity
-    if any(k in text for k in ["who developed you", "who created you", "your developer"]):
+    # 3. Person queries (Sujith / Vennela)
+    for name, context in PERSON_CONTEXT.items():
+        if name in text:
+            return gemini_reply(msg, context)
+
+    # 4. Developer identity
+    if any(k in text for k in [
+        "who developed you",
+        "who created you",
+        "your developer",
+        "your creator"
+    ]):
         return (
             "I was developed by Sujith Lavudu and Vennela Barnana "
             "for Lovely Professional University."
         )
 
-    # 4. LPU-first logic
+    # 5. LPU-FIRST ANSWERING
     LPU_TERMS = [
         "lpu", "lovely professional university",
         "ums", "rms", "dsw",
         "attendance", "hostel", "fees",
         "exam", "semester", "registration",
-        "reappear", "mid term", "end term"
+        "reappear", "mid term", "end term",
+        "student organization", "soc",
+        "mooc", "nptel", "swayam"
     ]
 
     if any(k in text for k in LPU_TERMS):
+
         admin_answer = search_admin_content(msg)
         if admin_answer.strip():
             return gemini_reply(msg, admin_answer)
@@ -207,12 +233,9 @@ def process_message(msg: str) -> str:
         if knowledge_answer.strip():
             return gemini_reply(msg, knowledge_answer)
 
-        return gemini_reply(
-            msg,
-            "No verified LPU-specific information is available for this question."
-        )
+        return gemini_reply(msg)
 
-    # 5. General fallback
+    # 6. General questions
     return gemini_reply(msg)
 
 # ------------------------------------------------------
