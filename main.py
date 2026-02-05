@@ -23,10 +23,13 @@ def health():
 # ------------------------------------------------------
 # GEMINI CONFIG
 # ------------------------------------------------------
-def get_gemini_client():
-    return genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-
 GEMINI_MODEL = "models/gemini-2.5-flash"
+
+def get_gemini_client():
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise RuntimeError("GEMINI_API_KEY not set")
+    return genai.Client(api_key=api_key)
 
 # ------------------------------------------------------
 # FIRESTORE
@@ -35,24 +38,46 @@ def get_db():
     return firestore.Client()
 
 # ------------------------------------------------------
-# LOAD STATIC LPU KNOWLEDGE
+# LOAD LPU KNOWLEDGE
 # ------------------------------------------------------
 def load_lpu_knowledge():
     try:
         with open("lpu_knowledge.txt", "r", encoding="utf-8") as f:
             return f.read()
     except Exception:
+        logging.warning("lpu_knowledge.txt not found")
         return ""
 
 STATIC_LPU = load_lpu_knowledge()
 
 # ------------------------------------------------------
-# SEARCH ADMIN CONTENT
+# SEARCH LPU KNOWLEDGE FILE
+# ------------------------------------------------------
+def search_lpu_knowledge(question: str, knowledge: str) -> str:
+    q_words = question.lower().split()
+    chunks = knowledge.split("\n\n")
+    matches = []
+
+    for chunk in chunks:
+        chunk_l = chunk.lower()
+        score = sum(1 for w in q_words if w in chunk_l)
+        if score >= 3:
+            matches.append((score, chunk))
+
+    matches.sort(reverse=True, key=lambda x: x[0])
+
+    if matches:
+        return "\n\n".join(m[1] for m in matches[:2])
+
+    return ""
+
+# ------------------------------------------------------
+# SEARCH ADMIN CONTENT (FIRESTORE)
 # ------------------------------------------------------
 def search_admin_content(question: str):
     db = get_db()
     q = question.lower()
-    matches = []
+    results = []
 
     docs = (
         db.collection("lpu_content")
@@ -64,61 +89,48 @@ def search_admin_content(question: str):
     for doc in docs:
         d = doc.to_dict()
         text = (d.get("textContent") or "").lower()
-        keywords = d.get("keywords") or []
+        keywords = [k.lower() for k in (d.get("keywords") or [])]
         category = (d.get("category") or "").lower()
 
-        if any(k.lower() in q for k in keywords) or category in q:
-            matches.append(f"{d.get('title','')}:\n{d.get('textContent','')}")
+        score = 0
+        for k in keywords:
+            if k in q:
+                score += 2
+        if category and category in q:
+            score += 1
 
-    return "\n\n".join(matches)
+        if score > 0:
+            results.append((score, d.get("textContent", "")))
 
+    results.sort(reverse=True, key=lambda x: x[0])
+
+    return "\n\n".join(r[1] for r in results[:2])
 
 # ------------------------------------------------------
 # GREETING
 # ------------------------------------------------------
 def handle_greeting(text: str):
-    if text in ["hi", "hello", "hey", "hii", "hai", "namaste"]:
+    if any(text.startswith(g) for g in ["hi", "hello", "hey", "hai", "namaste"]):
         return (
-            "Hello 👋 Welcome to **LPU VertoSewa**\n\n"
-            "An AI-powered assistant developed for **Lovely Professional University (LPU)**.\n\n"
-            "I can help you with information related to:\n\n"
-            "• Academics – schedules, rules\n"
-            "• Hostels & Fees – policies, payments, queries\n"
-            "• RMS / UMS – registrations, portals, procedures\n"
-            "• DSW Notices – updates and announcements\n"
-            "• People & General Information\n"
-            "• Date & Time\n\n"
-            "Just type your question to get started."
+            "Hello 👋 I’m **LPU VertoSewa**, the official AI assistant for "
+            "**Lovely Professional University**.\n\n"
+            "Ask me anything related to academics, exams, UMS/RMS, hostels, "
+            "fees, or university policies."
         )
     return None
 
 # ------------------------------------------------------
-# TIME & DATE (STRICTLY PYTHON)
+# TIME & DATE
 # ------------------------------------------------------
 def handle_time_date(text: str):
     ist = pytz.timezone("Asia/Kolkata")
-    now_ist = datetime.now(ist)
+    now = datetime.now(ist)
 
-    if text in ["time", "time now"]:
-        return f"⏰ Time: {now_ist.strftime('%I:%M %p')} (IST)"
+    if "time" in text and "date" not in text:
+        return f"⏰ Time: {now.strftime('%I:%M %p')} (IST)"
 
-    if text in ["date", "date today", "today date", "date only"]:
-        return f"📅 Date: {now_ist.strftime('%d %B %Y')}"
-
-    if "time in america" in text or "time in usa" in text:
-        et = pytz.timezone("US/Eastern")
-        ct = pytz.timezone("US/Central")
-        pt = pytz.timezone("US/Pacific")
-        return (
-            "🇺🇸 United States Time:\n"
-            f"• Eastern (ET): {datetime.now(et).strftime('%I:%M %p')}\n"
-            f"• Central (CT): {datetime.now(ct).strftime('%I:%M %p')}\n"
-            f"• Pacific (PT): {datetime.now(pt).strftime('%I:%M %p')}"
-        )
-
-    if "time in singapore" in text:
-        sg = pytz.timezone("Asia/Singapore")
-        return f"🇸🇬 Singapore Time: {datetime.now(sg).strftime('%I:%M %p')}"
+    if "date" in text:
+        return f"📅 Date: {now.strftime('%d %B %Y')}"
 
     return None
 
@@ -127,21 +139,21 @@ def handle_time_date(text: str):
 # ------------------------------------------------------
 def gemini_reply(question: str, context: str = ""):
     prompt = f"""
-You are an educational assistant.
+You are an AI assistant for Lovely Professional University (LPU).
 
-Rules:
-- Reply only in English
-- Be accurate and clear
-- Use provided context as VERIFIED facts
-- You may add general, publicly known information
-- Do NOT invent private, sensitive, or unverifiable details
-- Do NOT generate dates or real-time info
+STRICT RULES:
+- If context is provided, answer ONLY from it
+- Do NOT assume or invent LPU-specific rules
+- Be precise, factual, and concise
+- Do NOT generate dates or numbers unless present in context
 
 CONTEXT:
 {context}
 
 QUESTION:
 {question}
+
+ANSWER:
 """
     try:
         client = get_gemini_client()
@@ -150,63 +162,34 @@ QUESTION:
             contents=prompt
         )
         return res.text.strip()
-    except Exception as e:
-        logging.error(e)
-        return "Please try again later."
+    except Exception:
+        logging.exception("Gemini error")
+        return "Sorry, I couldn’t process that right now."
 
 # ------------------------------------------------------
-# CORE LOGIC
+# CORE MESSAGE PROCESSOR
 # ------------------------------------------------------
 def process_message(msg: str) -> str:
     text = msg.lower().strip()
 
-    # 1️⃣ TIME / DATE
+    # 1. Greeting
+    greeting = handle_greeting(text)
+    if greeting:
+        return greeting
+
+    # 2. Time / Date
     time_reply = handle_time_date(text)
     if time_reply:
         return time_reply
 
-    # 2️⃣ PERSON QUERIES (FIXED + GEMINI)
-    PERSON_CONTEXT = ""
-
-    if "sujith lavudu" in text:
-        PERSON_CONTEXT = """
-Sujith Lavudu is a student innovator, software developer, and author.
-He is the co-creator of the LPU Vertosewa AI Assistant and co-author of the book 'Decode the Code'.
-"""
-
-    elif "vennela barnana" in text:
-        PERSON_CONTEXT = """
-Vennela Barnana is an author and researcher.
-She is the co-creator of the LPU Vertosewa AI Assistant and co-author of the book 'Decode the Code'.
-"""
-
-    elif "rashmi mittal" in text:
-        PERSON_CONTEXT = """
-Dr. Rashmi Mittal is the Pro-Chancellor of Lovely Professional University (LPU).
-"""
-
-    if PERSON_CONTEXT:
-        return gemini_reply(msg, PERSON_CONTEXT)
-
-    # 3️⃣ GREETING
-    greet = handle_greeting(text)
-    if greet:
-        return greet
-
-    # 4️⃣ BOT DEVELOPER IDENTITY
-    if any(k in text for k in [
-        "who developed you",
-        "who created you",
-        "who is the developer",
-        "your developer",
-        "your creator"
-    ]):
+    # 3. Bot identity
+    if any(k in text for k in ["who developed you", "who created you", "your developer"]):
         return (
             "I was developed by Sujith Lavudu and Vennela Barnana "
-            "for Lovely Professional University (LPU)."
+            "for Lovely Professional University."
         )
 
-    # 5️⃣ LPU-FIRST STRATEGY
+    # 4. LPU-first logic
     LPU_TERMS = [
         "lpu", "lovely professional university",
         "ums", "rms", "dsw",
@@ -217,17 +200,19 @@ Dr. Rashmi Mittal is the Pro-Chancellor of Lovely Professional University (LPU).
 
     if any(k in text for k in LPU_TERMS):
         admin_answer = search_admin_content(msg)
-
         if admin_answer.strip():
             return gemini_reply(msg, admin_answer)
 
-        if STATIC_LPU.strip():
-            return gemini_reply(msg, STATIC_LPU)
+        knowledge_answer = search_lpu_knowledge(msg, STATIC_LPU)
+        if knowledge_answer.strip():
+            return gemini_reply(msg, knowledge_answer)
 
-        # fallback → Gemini general knowledge (Google-known LPU info)
-        return gemini_reply(msg)
+        return gemini_reply(
+            msg,
+            "No verified LPU-specific information is available for this question."
+        )
 
-    # 6️⃣ GENERAL QUESTIONS
+    # 5. General fallback
     return gemini_reply(msg)
 
 # ------------------------------------------------------
