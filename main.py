@@ -7,6 +7,9 @@ import pytz
 from google.cloud import firestore
 from google import genai
 
+# ------------------------------------------------------
+# APP INIT
+# ------------------------------------------------------
 app = FastAPI()
 logging.basicConfig(level=logging.INFO)
 
@@ -35,54 +38,57 @@ def get_db():
     return firestore.Client()
 
 # ------------------------------------------------------
-# LOAD STATIC LPU KNOWLEDGE
+# LOAD LPU KNOWLEDGE FILE
 # ------------------------------------------------------
 def load_lpu_knowledge():
     try:
         with open("lpu_knowledge.txt", "r", encoding="utf-8") as f:
             return f.read()
     except Exception:
+        logging.warning("lpu_knowledge.txt not found")
         return ""
 
 STATIC_LPU = load_lpu_knowledge()
 
 # ------------------------------------------------------
-# LPU TERMS
+# PERSON CONTEXT (CONTROLLED)
 # ------------------------------------------------------
-LPU_TERMS = [
-    "lpu", "lovely professional university",
-    "ums", "rms", "dsw",
-    "attendance", "hostel", "fees",
-    "exam", "semester", "registration",
-    "reappear", "mid term", "end term",
-    "student organization", "soc",
-    "mooc", "nptel", "swayam",
-    "ncc", "pro chancellor", "chancellor"
-]
-
-def is_lpu_related(text: str):
-    return any(term in text.lower() for term in LPU_TERMS)
+PERSON_CONTEXT = {
+    "sujith lavudu": """
+Sujith Lavudu is a student innovator and software developer at Lovely Professional University.
+He is the co-creator of the LPU VertoSewa AI assistant and co-author of the book 'Decode the Code'.
+""",
+    "vennela barnana": """
+Vennela Barnana is a researcher and author associated with Lovely Professional University.
+She is the co-creator of the LPU VertoSewa AI assistant and co-author of the book 'Decode the Code'.
+"""
+}
 
 # ------------------------------------------------------
-# SEARCH STATIC
+# SEARCH LPU KNOWLEDGE (PRIMARY SOURCE)
 # ------------------------------------------------------
-def search_static(question: str):
+def search_lpu_knowledge(question: str, knowledge: str) -> str:
     q_words = question.lower().split()
-    chunks = STATIC_LPU.split("\n\n")
-    scored = []
+    chunks = knowledge.split("\n\n")
+    matches = []
 
     for chunk in chunks:
-        score = sum(1 for w in q_words if w in chunk.lower())
-        if score > 0:
-            scored.append((score, chunk))
+        chunk_l = chunk.lower()
+        score = sum(1 for w in q_words if w in chunk_l)
+        if score >= 3:
+            matches.append((score, chunk))
 
-    scored.sort(reverse=True, key=lambda x: x[0])
-    return "\n\n".join(c[1] for c in scored[:3])
+    matches.sort(reverse=True, key=lambda x: x[0])
+
+    if matches:
+        return "\n\n".join(m[1] for m in matches[:2])
+
+    return ""
 
 # ------------------------------------------------------
-# SEARCH ADMIN
+# SEARCH ADMIN CONTENT (FIRESTORE)
 # ------------------------------------------------------
-def search_admin(question: str):
+def search_admin_content(question: str):
     db = get_db()
     q = question.lower()
     results = []
@@ -90,40 +96,71 @@ def search_admin(question: str):
     docs = (
         db.collection("lpu_content")
         .order_by("createdAt", direction=firestore.Query.DESCENDING)
-        .limit(100)
+        .limit(50)
         .stream()
     )
 
     for doc in docs:
-        data = doc.to_dict()
-        content = data.get("textContent", "")
-        if any(word in content.lower() for word in q.split()):
-            results.append(content)
+        d = doc.to_dict()
+        keywords = [k.lower() for k in (d.get("keywords") or [])]
+        category = (d.get("category") or "").lower()
 
-    return "\n\n".join(results[:2])
+        score = 0
+        for k in keywords:
+            if k in q:
+                score += 2
+        if category and category in q:
+            score += 1
+
+        if score > 0:
+            results.append((score, d.get("textContent", "")))
+
+    results.sort(reverse=True, key=lambda x: x[0])
+
+    return "\n\n".join(r[1] for r in results[:2])
 
 # ------------------------------------------------------
-# GEMINI
+# GREETING
+# ------------------------------------------------------
+def handle_greeting(text: str):
+    if any(text.startswith(g) for g in ["hi", "hello", "hey", "hai", "namaste"]):
+        return (
+            "Hello 👋 I’m **LPU VertoSewa**, the AI assistant for "
+            "**Lovely Professional University**.\n\n"
+            "Ask me anything related to academics, exams, UMS/RMS, "
+            "hostels, fees, or university information."
+        )
+    return None
+
+# ------------------------------------------------------
+# TIME & DATE
+# ------------------------------------------------------
+def handle_time_date(text: str):
+    ist = pytz.timezone("Asia/Kolkata")
+    now = datetime.now(ist)
+
+    if "time" in text and "date" not in text:
+        return f"⏰ Time: {now.strftime('%I:%M %p')} (IST)"
+
+    if "date" in text:
+        return f"📅 Date: {now.strftime('%d %B %Y')}"
+
+    return None
+
+# ------------------------------------------------------
+# GEMINI RESPONSE (CLEAN – NO CONTEXT TALK)
 # ------------------------------------------------------
 def gemini_reply(question: str, context: str = ""):
-
-    if context:
-        instruction = """
-You are the official AI assistant of Lovely Professional University.
-
-Use the CONTEXT below to answer accurately.
-If additional clarification is needed, answer clearly.
-Do not mention the context.
-"""
-    else:
-        instruction = """
-You are a helpful assistant.
-Provide a clear, structured, accurate answer.
-Do not mention internal reasoning.
-"""
-
     prompt = f"""
-{instruction}
+You are an AI assistant for Lovely Professional University (LPU).
+
+IMPORTANT INSTRUCTIONS:
+- Use the CONTEXT if it contains the answer
+- If the CONTEXT does not contain the answer, answer normally using general knowledge
+- NEVER mention the context, sources, or limitations
+- NEVER explain your reasoning
+- Give ONLY the final, direct answer
+- Be accurate, clear, and professional
 
 CONTEXT:
 {context}
@@ -131,69 +168,87 @@ CONTEXT:
 QUESTION:
 {question}
 
-FINAL ANSWER:
+FINAL ANSWER ONLY:
 """
-
     try:
         client = get_gemini_client()
-        response = client.models.generate_content(
+        res = client.models.generate_content(
             model=GEMINI_MODEL,
             contents=prompt
         )
-        return response.text.strip()
+        return res.text.strip()
     except Exception:
-        return "Sorry, something went wrong."
+        logging.exception("Gemini error")
+        return "Sorry, I couldn’t process that right now."
 
 # ------------------------------------------------------
-# PROCESS MESSAGE
+# CORE MESSAGE PROCESSOR
 # ------------------------------------------------------
-def process_message(message: str):
+def process_message(msg: str) -> str:
+    text = msg.lower().strip()
 
-    text = message.lower().strip()
+    # 1. Greeting
+    greeting = handle_greeting(text)
+    if greeting:
+        return greeting
 
-    # Greeting
-    if text.startswith(("hi", "hello", "hey", "hai", "namaste")):
-        return "Hello 👋 I’m LPU VertoSewa. How can I assist you today?"
+    # 2. Time / Date
+    time_reply = handle_time_date(text)
+    if time_reply:
+        return time_reply
 
-    # Time / Date
-    ist = pytz.timezone("Asia/Kolkata")
-    now = datetime.now(ist)
+    # 3. Person queries
+    for name, context in PERSON_CONTEXT.items():
+        if name in text:
+            return gemini_reply(msg, context)
 
-    if "time" in text and "date" not in text:
-        return f"⏰ {now.strftime('%I:%M %p')} (IST)"
+    # 4. Developer identity
+    if any(k in text for k in [
+        "who developed you",
+        "who created you",
+        "your developer",
+        "your creator"
+    ]):
+        return (
+            "I was developed by Sujith Lavudu and Vennela Barnana "
+            "for Lovely Professional University."
+        )
 
-    if "date" in text:
-        return f"📅 {now.strftime('%d %B %Y')}"
+    # 5. LPU-FIRST ANSWERING
+    LPU_TERMS = [
+        "lpu", "lovely professional university",
+        "ums", "rms", "dsw",
+        "attendance", "hostel", "fees",
+        "exam", "semester", "registration",
+        "reappear", "mid term", "end term",
+        "student organization", "soc",
+        "mooc", "nptel", "swayam"
+    ]
 
-    # LPU FLOW
-    if is_lpu_related(text):
+    if any(k in text for k in LPU_TERMS):
 
-        static_data = search_static(message)
-        admin_data = search_admin(message)
+        admin_answer = search_admin_content(msg)
+        if admin_answer.strip():
+            return gemini_reply(msg, admin_answer)
 
-        combined_context = f"{static_data}\n\n{admin_data}".strip()
+        knowledge_answer = search_lpu_knowledge(msg, STATIC_LPU)
+        if knowledge_answer.strip():
+            return gemini_reply(msg, knowledge_answer)
 
-        # ✅ If context found → grounded
-        if combined_context:
-            return gemini_reply(message, combined_context)
+        return gemini_reply(msg)
 
-        # ✅ If no context → fallback to Gemini general knowledge
-        return gemini_reply(message)
-
-    # General questions
-    return gemini_reply(message)
+    # 6. General fallback
+    return gemini_reply(msg)
 
 # ------------------------------------------------------
-# API
+# CHAT API
 # ------------------------------------------------------
 @app.post("/chat")
 async def chat_api(request: Request):
-
     data = await request.json()
     message = data.get("message", "").strip()
 
     if not message:
         return {"reply": "Please enter a valid question."}
 
-    reply = process_message(message)
-    return {"reply": reply}
+    return {"reply": process_message(message)}
