@@ -3,7 +3,6 @@ import os
 import logging
 from datetime import datetime
 import pytz
-import re
 
 from google.cloud import firestore
 from google import genai
@@ -66,10 +65,18 @@ She is the co-creator of the LPU VertoSewa AI assistant and co-author of the boo
 }
 
 # ------------------------------------------------------
-# BASIC PROMPT INJECTION FILTER
+# ACRONYM HANDLING (Prevents RMS confusion)
+# ------------------------------------------------------
+LPU_ACRONYMS = {
+    "rms": "RMS at LPU stands for Result Management System (student result portal). Please specify what you need (login help, marks, access, etc.).",
+    "ums": "UMS stands for University Management System at LPU. Please specify your query."
+}
+
+# ------------------------------------------------------
+# PROMPT INJECTION FILTER
 # ------------------------------------------------------
 def is_malicious(text: str) -> bool:
-    patterns = [
+    blocked = [
         "ignore previous",
         "system prompt",
         "developer message",
@@ -77,10 +84,10 @@ def is_malicious(text: str) -> bool:
         "act as"
     ]
     text = text.lower()
-    return any(p in text for p in patterns)
+    return any(b in text for b in blocked)
 
 # ------------------------------------------------------
-# STATIC KNOWLEDGE SEARCH (Improved Scoring)
+# STATIC SEARCH
 # ------------------------------------------------------
 def search_static_knowledge(question: str):
     q_words = set(question.lower().split())
@@ -97,7 +104,7 @@ def search_static_knowledge(question: str):
     return "\n\n".join([c[1] for c in scored[:3]])
 
 # ------------------------------------------------------
-# ADMIN FIRESTORE SEARCH
+# ADMIN SEARCH
 # ------------------------------------------------------
 def search_admin_content(question: str):
     db = get_db()
@@ -130,7 +137,7 @@ def search_admin_content(question: str):
     return "\n\n".join([r[1] for r in results[:2]])
 
 # ------------------------------------------------------
-# GEMINI RESPONSE (STRICT GROUNDING FOR LPU)
+# GEMINI RESPONSE
 # ------------------------------------------------------
 def gemini_reply(question: str, context: str = "", strict_lpu=False):
 
@@ -139,17 +146,17 @@ def gemini_reply(question: str, context: str = "", strict_lpu=False):
 You are the official AI assistant of Lovely Professional University.
 
 RULES:
-- Use ONLY the provided CONTEXT to answer.
-- If answer is not clearly available in the context, say:
+- Use ONLY the provided CONTEXT.
+- If answer is not clearly in the context, say:
   "Please contact the university administration for accurate information."
-- Do not add external knowledge.
-- Give a clean, clear, professional answer.
+- Do NOT use external knowledge.
+- Be clear and professional.
 """
     else:
         instruction = """
-You are a helpful, intelligent assistant.
-Give a clear, accurate and well-structured answer.
-Do not mention context or internal reasoning.
+You are a helpful assistant.
+Give a clear, accurate, well-structured answer.
+Do not mention internal reasoning.
 """
 
     prompt = f"""
@@ -217,18 +224,29 @@ def process_message(message: str):
     if "date" in text:
         return f"📅 {now.strftime('%d %B %Y')}"
 
+    # Acronym direct handling (short queries like "rms")
+    if text in LPU_ACRONYMS:
+        return LPU_ACRONYMS[text]
+
     # Person context
     for name, context in PERSON_CONTEXT.items():
         if name in text:
             return gemini_reply(message, context)
 
-    # LPU Questions (STRICT GROUNDED)
+    # LPU questions
     if is_lpu_related(text):
 
         static_answer = search_static_knowledge(message)
         admin_answer = search_admin_content(message)
 
-        combined_context = f"{static_answer}\n\n{admin_answer}"
+        combined_context = f"{static_answer}\n\n{admin_answer}".strip()
+
+        # 🚨 Prevent hallucination if no context found
+        if not combined_context:
+            return (
+                "This query is related to LPU, but I couldn't find official data. "
+                "Please contact the university administration for accurate information."
+            )
 
         return gemini_reply(
             question=message,
@@ -236,7 +254,7 @@ def process_message(message: str):
             strict_lpu=True
         )
 
-    # General Questions
+    # General fallback
     return gemini_reply(message)
 
 # ------------------------------------------------------
