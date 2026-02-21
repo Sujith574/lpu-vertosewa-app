@@ -7,9 +7,6 @@ import pytz
 from google.cloud import firestore
 from google import genai
 
-# ------------------------------------------------------
-# APP INIT
-# ------------------------------------------------------
 app = FastAPI()
 logging.basicConfig(level=logging.INFO)
 
@@ -45,68 +42,47 @@ def load_lpu_knowledge():
         with open("lpu_knowledge.txt", "r", encoding="utf-8") as f:
             return f.read()
     except Exception:
-        logging.warning("lpu_knowledge.txt not found")
         return ""
 
 STATIC_LPU = load_lpu_knowledge()
 
 # ------------------------------------------------------
-# PERSON CONTEXT
+# LPU TERMS
 # ------------------------------------------------------
-PERSON_CONTEXT = {
-    "sujith": """
-Sujith Lavudu is a student innovator and software developer at Lovely Professional University.
-He is the co-creator of the LPU VertoSewa AI assistant and co-author of the book 'Decode the Code'.
-""",
-    "vennela": """
-Vennela Barnana is a researcher and author associated with Lovely Professional University.
-She is the co-creator of the LPU VertoSewa AI assistant and co-author of the book 'Decode the Code'.
-"""
-}
+LPU_TERMS = [
+    "lpu", "lovely professional university",
+    "ums", "rms", "dsw",
+    "attendance", "hostel", "fees",
+    "exam", "semester", "registration",
+    "reappear", "mid term", "end term",
+    "student organization", "soc",
+    "mooc", "nptel", "swayam",
+    "ncc", "pro chancellor", "chancellor"
+]
+
+def is_lpu_related(text: str):
+    return any(term in text.lower() for term in LPU_TERMS)
 
 # ------------------------------------------------------
-# ACRONYM HANDLING (Prevents RMS confusion)
+# SEARCH STATIC
 # ------------------------------------------------------
-LPU_ACRONYMS = {
-    "rms": "RMS at LPU stands for Result Management System (student result portal). Please specify what you need (login help, marks, access, etc.).",
-    "ums": "UMS stands for University Management System at LPU. Please specify your query."
-}
-
-# ------------------------------------------------------
-# PROMPT INJECTION FILTER
-# ------------------------------------------------------
-def is_malicious(text: str) -> bool:
-    blocked = [
-        "ignore previous",
-        "system prompt",
-        "developer message",
-        "reveal instructions",
-        "act as"
-    ]
-    text = text.lower()
-    return any(b in text for b in blocked)
-
-# ------------------------------------------------------
-# STATIC SEARCH
-# ------------------------------------------------------
-def search_static_knowledge(question: str):
-    q_words = set(question.lower().split())
+def search_static(question: str):
+    q_words = question.lower().split()
     chunks = STATIC_LPU.split("\n\n")
     scored = []
 
     for chunk in chunks:
-        chunk_l = chunk.lower()
-        score = sum(1 for w in q_words if w in chunk_l)
+        score = sum(1 for w in q_words if w in chunk.lower())
         if score > 0:
             scored.append((score, chunk))
 
     scored.sort(reverse=True, key=lambda x: x[0])
-    return "\n\n".join([c[1] for c in scored[:3]])
+    return "\n\n".join(c[1] for c in scored[:3])
 
 # ------------------------------------------------------
-# ADMIN SEARCH
+# SEARCH ADMIN
 # ------------------------------------------------------
-def search_admin_content(question: str):
+def search_admin(question: str):
     db = get_db()
     q = question.lower()
     results = []
@@ -119,43 +95,30 @@ def search_admin_content(question: str):
     )
 
     for doc in docs:
-        d = doc.to_dict()
-        text_content = d.get("textContent", "")
-        keywords = [k.lower() for k in (d.get("keywords") or [])]
+        data = doc.to_dict()
+        content = data.get("textContent", "")
+        if any(word in content.lower() for word in q.split()):
+            results.append(content)
 
-        score = 0
-        for k in keywords:
-            if k in q:
-                score += 2
-        if any(word in text_content.lower() for word in q.split()):
-            score += 1
-
-        if score > 0:
-            results.append((score, text_content))
-
-    results.sort(reverse=True, key=lambda x: x[0])
-    return "\n\n".join([r[1] for r in results[:2]])
+    return "\n\n".join(results[:2])
 
 # ------------------------------------------------------
-# GEMINI RESPONSE
+# GEMINI
 # ------------------------------------------------------
-def gemini_reply(question: str, context: str = "", strict_lpu=False):
+def gemini_reply(question: str, context: str = ""):
 
-    if strict_lpu:
+    if context:
         instruction = """
 You are the official AI assistant of Lovely Professional University.
 
-RULES:
-- Use ONLY the provided CONTEXT.
-- If answer is not clearly in the context, say:
-  "Please contact the university administration for accurate information."
-- Do NOT use external knowledge.
-- Be clear and professional.
+Use the CONTEXT below to answer accurately.
+If additional clarification is needed, answer clearly.
+Do not mention the context.
 """
     else:
         instruction = """
 You are a helpful assistant.
-Give a clear, accurate, well-structured answer.
+Provide a clear, structured, accurate answer.
 Do not mention internal reasoning.
 """
 
@@ -179,36 +142,14 @@ FINAL ANSWER:
         )
         return response.text.strip()
     except Exception:
-        logging.exception("Gemini error")
         return "Sorry, something went wrong."
 
 # ------------------------------------------------------
-# LPU DETECTION
-# ------------------------------------------------------
-LPU_TERMS = [
-    "lpu", "lovely professional university",
-    "ums", "rms", "dsw",
-    "attendance", "hostel", "fees",
-    "exam", "semester", "registration",
-    "reappear", "mid term", "end term",
-    "student organization", "soc",
-    "mooc", "nptel", "swayam"
-]
-
-def is_lpu_related(text: str):
-    text = text.lower()
-    return any(term in text for term in LPU_TERMS)
-
-# ------------------------------------------------------
-# CORE MESSAGE PROCESSOR
+# PROCESS MESSAGE
 # ------------------------------------------------------
 def process_message(message: str):
 
     text = message.lower().strip()
-
-    # Injection protection
-    if is_malicious(text):
-        return "I cannot process that request."
 
     # Greeting
     if text.startswith(("hi", "hello", "hey", "hai", "namaste")):
@@ -224,41 +165,26 @@ def process_message(message: str):
     if "date" in text:
         return f"📅 {now.strftime('%d %B %Y')}"
 
-    # Acronym direct handling (short queries like "rms")
-    if text in LPU_ACRONYMS:
-        return LPU_ACRONYMS[text]
-
-    # Person context
-    for name, context in PERSON_CONTEXT.items():
-        if name in text:
-            return gemini_reply(message, context)
-
-    # LPU questions
+    # LPU FLOW
     if is_lpu_related(text):
 
-        static_answer = search_static_knowledge(message)
-        admin_answer = search_admin_content(message)
+        static_data = search_static(message)
+        admin_data = search_admin(message)
 
-        combined_context = f"{static_answer}\n\n{admin_answer}".strip()
+        combined_context = f"{static_data}\n\n{admin_data}".strip()
 
-        # 🚨 Prevent hallucination if no context found
-        if not combined_context:
-            return (
-                "This query is related to LPU, but I couldn't find official data. "
-                "Please contact the university administration for accurate information."
-            )
+        # ✅ If context found → grounded
+        if combined_context:
+            return gemini_reply(message, combined_context)
 
-        return gemini_reply(
-            question=message,
-            context=combined_context,
-            strict_lpu=True
-        )
+        # ✅ If no context → fallback to Gemini general knowledge
+        return gemini_reply(message)
 
-    # General fallback
+    # General questions
     return gemini_reply(message)
 
 # ------------------------------------------------------
-# CHAT ENDPOINT
+# API
 # ------------------------------------------------------
 @app.post("/chat")
 async def chat_api(request: Request):
